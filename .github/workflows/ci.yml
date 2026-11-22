@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm install
       - run: npm run check
+      - run: npm test
       - run: npm run build
       - name: Verify Obsidian plugin artifacts
         run: test -s manifest.json && test -s main.js
