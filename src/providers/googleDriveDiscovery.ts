@@ -22,7 +22,7 @@ export class GoogleDriveDiscovery {
     if (!folderId.trim()) throw new Error("A Google Drive destination folder is required.");
     const token = await this.accessToken();
     const params = new URLSearchParams({
-      q: `'${folderId.replace(/\\\\/g, "\\\\'")}' in parents and trashed = false and appProperties has { key='cloudvaultEncrypted' and value='1' }`,
+      q: `'${folderId.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}' in parents and trashed = false and appProperties has { key='cloudvaultEncrypted' and value='1' }`,
       pageSize: "100",
       orderBy: "modifiedTime desc",
       fields: "nextPageToken,files(id,name,modifiedTime,size,appProperties)",
