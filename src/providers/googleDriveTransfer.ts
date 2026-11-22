@@ -124,7 +124,6 @@ export class GoogleDriveTransfer {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/octet-stream",
-          "Content-Length": String(chunk.byteLength),
           "Content-Range": `bytes ${state.offset}-${end}/${state.totalBytes}`,
         },
         body: chunk,
