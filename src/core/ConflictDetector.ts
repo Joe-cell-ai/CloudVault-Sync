@@ -53,12 +53,12 @@ export function detectConflict(
     return { action: "no-change" };
   }
 
+  // A missing side is a deletion, not a content revision change. Keep those
+  // signals separate so edit-vs-delete is classified before ordinary changes.
   const localChanged = current.localExists
-    ? current.localRevision !== baseline.localRevision
-    : true;
+    && current.localRevision !== baseline.localRevision;
   const remoteChanged = current.remoteExists
-    ? current.remoteRevision !== baseline.remoteRevision
-    : true;
+    && current.remoteRevision !== baseline.remoteRevision;
 
   if (localChanged && remoteChanged) {
     return { action: "conflict", conflict: makeConflict("both-sides-changed", current, baseline) };
