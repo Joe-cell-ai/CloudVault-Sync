@@ -207,6 +207,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
         new Notice("No CloudVault encrypted files were found in the selected Google Drive folder.");
         return;
       }
+      const thisPlugin = this;
       const modal = new class extends Modal {
         onOpen(): void {
           this.titleEl.setText(`CloudVault encrypted files (${files.length})`);
@@ -218,8 +219,11 @@ export default class CloudVaultSyncPlugin extends Plugin {
               this.close();
               const destination = await thisPlugin.requestRemoteDestination(file.opaqueName);
               if (!destination) return;
+              const filePassphrase = await thisPlugin.requestPassphrase("Enter file encryption passphrase", false);
+              if (!filePassphrase) return;
+              thisPlugin.transferPassphrase = filePassphrase;
               try {
-                const plaintext = await thisPlugin.transfer!.downloadEncryptedFile(file.id, passphrase);
+                const plaintext = await thisPlugin.transfer!.downloadEncryptedFile(file.id, filePassphrase);
                 const restored = await restoreWithoutOverwrite({
                   exists: async path => thisPlugin.app.vault.getAbstractFileByPath(path) !== null,
                   createBinary: async (path, data) => thisPlugin.app.vault.createBinary(path, data),
@@ -229,13 +233,14 @@ export default class CloudVaultSyncPlugin extends Plugin {
                   : "Restored: " + restored.path, 8000);
               } catch (error) {
                 new Notice(error instanceof Error ? error.message : "Encrypted download failed safely.", 8000);
+              } finally {
+                thisPlugin.transferPassphrase = undefined;
               }
             }));
           }
         }
         onClose(): void { this.contentEl.empty(); }
       }(this.app);
-      const thisPlugin = this;
       modal.open();
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Could not list encrypted Google Drive files.", 8000);
