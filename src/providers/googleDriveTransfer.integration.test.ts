@@ -41,7 +41,7 @@ describe("GoogleDriveTransfer", () => {
     assert.equal(result.id, "remote-1");
     assert.notDeepEqual(uploaded, plaintext);
     assert.deepEqual([...uploaded.slice(0, 4)], [0x43, 0x56, 0x53, 0x31]);
-    assert.equal(metadata.name, "cloudvault-" + metadata.appProperties && String(metadata.name));
+    assert.match(String(metadata.name), /^cloudvault-[a-f0-9]{64}$/);
     assert.equal((metadata.appProperties as Record<string, string>).cloudvaultPath, undefined);
     assert.equal(states.values.size, 0);
     assert.equal(payloads.values.size, 0);
