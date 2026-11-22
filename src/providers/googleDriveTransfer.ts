@@ -132,7 +132,7 @@ export class GoogleDriveTransfer {
 
       if (response.status === 308) {
         const range = response.headers.get("Range");
-        state.offset = range ? Number(range.match(/-(\\d+)$/)?.[1] ?? -1) + 1 : 0;
+        state.offset = range ? Number(range.match(/-(\d+)$/)?.[1] ?? -1) + 1 : 0;
         await this.sessions.set(state);
         continue;
       }
