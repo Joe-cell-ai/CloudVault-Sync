@@ -1,0 +1,9 @@
+{
+  "id": "cloudvault-sync",
+  "name": "CloudVault Sync",
+  "version": "0.2.0",
+  "minAppVersion": "1.5.0",
+  "description": "Local-first, encrypted multi-cloud synchronization for Obsidian vaults.",
+  "author": "Joe-cell-ai",
+  "isDesktopOnly": false
+}
