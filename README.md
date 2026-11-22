@@ -19,6 +19,7 @@ The current `main` branch includes:
 - Paginated Google Drive discovery restricted to CloudVault encrypted objects, with metadata validation and no content download during listing.
 - An Obsidian command to browse discovered encrypted files and restore a selected item to a user-chosen path without overwriting existing content.
 - A locally stored AES-256-GCM encrypted path manifest that maps opaque Google Drive path hashes back to vault-relative paths; known paths are prefilled during restore.
+- An encrypted sync-baseline store that records local SHA-256 content fingerprints and remote file revision metadata without exposing paths or fingerprints in plugin data. It is a foundation for reconciliation and does not yet trigger automatic transfers.
 - A pure conflict-decision engine that distinguishes one-sided edits, two-sided edits, and deletion-vs-edit conflicts.
 - Automated tests for token encryption and conflict decisions, included in CI.
 
@@ -59,7 +60,7 @@ These are project requirements. The modules listed above are foundations and do 
 ## Next work
 
 1. Validate OAuth callback compatibility on desktop, Android, and iOS.
-2. Add baseline tracking (content hashes and remote revisions) and an explicit conflict-resolution UI.
+2. Connect encrypted baseline records to Google Drive revisions and add an explicit conflict-resolution UI.
 3. Add remote change cursor persistence and automatic two-way reconciliation.
 4. Add independent OneDrive and MEGA adapters.
 5. Validate interrupted transfers and platform behavior on desktop, Android, and iOS.
