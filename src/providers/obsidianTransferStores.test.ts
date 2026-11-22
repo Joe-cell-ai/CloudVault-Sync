@@ -14,7 +14,9 @@ describe("transfer persistence adapters", () => {
     };
     const store = new ObsidianPendingPayloadStore(adapter);
     const ref = await store.put("notes/hello.md", new Uint8Array([4, 5, 6]));
-    assert.deepEqual([...await store.get(ref)!], [4, 5, 6]);
+    const restored = await store.get(ref);
+    assert.ok(restored);
+    assert.deepEqual([...restored], [4, 5, 6]);
     await store.remove(ref);
     assert.equal(await store.get(ref), undefined);
   });
