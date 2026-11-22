@@ -45,7 +45,7 @@ export class GoogleTokenManager {
     this.unlockedTokens = undefined;
   }
 
-  async getAccessToken(): Promise<string> {
+  async getAccessToken(passphrase?: string): Promise<string> {
     if (!this.unlockedTokens) throw new Error("Unlock Google Drive credentials before syncing.");
     if (this.unlockedTokens.expiresAt > Date.now() + 60_000) return this.unlockedTokens.accessToken;
     if (!this.unlockedTokens.refreshToken) throw new Error("Google refresh token is unavailable. Reconnect Google Drive.");
@@ -72,7 +72,7 @@ export class GoogleTokenManager {
       expiresAt: Date.now() + refreshed.expires_in * 1000,
       scope: refreshed.scope ?? this.unlockedTokens.scope,
     };
-    // Caller must persist the refreshed encrypted envelope before app shutdown.
+    if (passphrase) await this.persistUnlockedTokens(passphrase);
     return this.unlockedTokens.accessToken;
   }
 
