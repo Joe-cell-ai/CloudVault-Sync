@@ -63,7 +63,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
-    this.tokenManager = this.createTokenManager();
+    this.tokenManager?.setClientId(this.settings.googleDriveClientId);
     await this.persist();
   }
 
