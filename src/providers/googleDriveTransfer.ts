@@ -92,7 +92,7 @@ export class GoogleDriveTransfer {
         appProperties: {
           cloudvaultEncrypted: "1",
           cloudvaultFormat: "1",
-          cloudvaultPathHash: await opaqueRemoteName(state.path),
+          cloudvaultPathHash: await hashVaultPath(state.path),
         },
       };
       const start = await this.fetcher(`${UPLOAD_API}?uploadType=resumable&fields=id,name,mimeType,modifiedTime,size,appProperties`, {
