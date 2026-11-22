@@ -6,6 +6,7 @@ import { GoogleTokenManager } from "./providers/googleTokenManager";
 import type { StoredTokenEnvelope } from "./providers/encryptedTokenVault";
 import { GoogleDriveTransfer, restoreWithoutOverwrite } from "./providers/googleDriveTransfer";
 import { GoogleDriveDiscovery } from "./providers/googleDriveDiscovery";
+import { EncryptedPathManifest } from "./providers/encryptedPathManifest";
 import type { ResumableUploadState } from "./providers/googleDriveTransfer";
 import { ObsidianPendingPayloadStore, PluginDataUploadStateStore, type BinaryStorageAdapter } from "./providers/obsidianTransferStores";
 import { CloudVaultSettingTab, DEFAULT_SETTINGS, type CloudVaultSettings } from "./settings";
@@ -16,6 +17,7 @@ interface PersistedData {
   googleOAuthPending?: { state: string; verifier: string; createdAt: number };
   googleTokenEnvelope?: StoredTokenEnvelope;
   googlePendingUploads?: ResumableUploadState[];
+  encryptedPathManifest?: string;
 }
 
 export default class CloudVaultSyncPlugin extends Plugin {
@@ -30,6 +32,8 @@ export default class CloudVaultSyncPlugin extends Plugin {
   private uploadStates?: PluginDataUploadStateStore;
   private transfer?: GoogleDriveTransfer;
   private discovery?: GoogleDriveDiscovery;
+  private pathManifest?: EncryptedPathManifest;
+  private pathManifestCiphertext?: string;
   private transferPassphrase?: string;
 
   async onload(): Promise<void> {
@@ -40,6 +44,11 @@ export default class CloudVaultSyncPlugin extends Plugin {
     this.googleTokenEnvelope = data?.googleTokenEnvelope;
     this.tokenManager = this.createTokenManager();
     this.googlePendingUploads = data?.googlePendingUploads ?? [];
+    this.pathManifestCiphertext = data?.encryptedPathManifest;
+    this.pathManifest = new EncryptedPathManifest({
+      read: async () => this.pathManifestCiphertext,
+      write: async ciphertext => { this.pathManifestCiphertext = ciphertext; await this.persist(); },
+    });
     this.uploadStates = new PluginDataUploadStateStore(this.googlePendingUploads, async states => {
       this.googlePendingUploads = states;
       await this.persist();
@@ -158,7 +167,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
   }
 
 
-  private async requestRemoteDestination(fileName: string): Promise<string | null> {
+  private async requestRemoteDestination(fileName: string, suggestedPath?: string): Promise<string | null> {
     return new Promise(resolve => {
       let settled = false;
       const modal = new class extends Modal {
@@ -167,6 +176,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
           this.contentEl.createEl("p", { text: `Encrypted remote item: ${fileName}` });
           const input = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "Vault path, e.g. notes/restored.md" } });
           input.style.width = "100%";
+          input.value = suggestedPath ?? "";
           new Setting(this.contentEl)
             .addButton(button => button.setButtonText("Download").setCta().onClick(() => {
               const path = input.value.trim().replace(/^\/+/, "");
@@ -203,6 +213,11 @@ export default class CloudVaultSyncPlugin extends Plugin {
     this.transferPassphrase = passphrase;
     try {
       const files = await this.discovery.listAllEncryptedFiles(this.settings.googleDriveFolderId.trim());
+      const mappedPaths = new Map<string, string>();
+      for (const file of files) {
+        const entry = await this.pathManifest?.resolve(file.pathHash, passphrase);
+        if (entry) mappedPaths.set(file.id, entry.vaultPath);
+      }
       if (!files.length) {
         new Notice("No CloudVault encrypted files were found in the selected Google Drive folder.");
         return;
@@ -213,11 +228,11 @@ export default class CloudVaultSyncPlugin extends Plugin {
           this.titleEl.setText(`CloudVault encrypted files (${files.length})`);
           for (const file of files) {
             const row = new Setting(this.contentEl)
-              .setName(file.pathHash.slice(0, 16) + "…")
-              .setDesc(`${file.modifiedTime || "Date unavailable"} · ${file.size ?? "Unknown"} bytes · encrypted`);
+              .setName(mappedPaths.get(file.id) ?? file.pathHash.slice(0, 16) + "…")
+              .setDesc(`${file.modifiedTime || "Date unavailable"} · ${file.size ?? "Unknown"} bytes · ${mappedPaths.has(file.id) ? "path matched locally" : "path not mapped yet"}`);
             row.addButton(button => button.setButtonText("Download safely").onClick(async () => {
               this.close();
-              const destination = await thisPlugin.requestRemoteDestination(file.opaqueName);
+              const destination = await thisPlugin.requestRemoteDestination(file.opaqueName, mappedPaths.get(file.id));
               if (!destination) return;
               const filePassphrase = await thisPlugin.requestPassphrase("Enter file encryption passphrase", false);
               if (!filePassphrase) return;
@@ -228,6 +243,10 @@ export default class CloudVaultSyncPlugin extends Plugin {
                   exists: async path => thisPlugin.app.vault.getAbstractFileByPath(path) !== null,
                   createBinary: async (path, data) => thisPlugin.app.vault.createBinary(path, data),
                 }, destination, plaintext);
+                await thisPlugin.pathManifest?.recordRemote(file.pathHash, destination, filePassphrase, {
+                  fileId: file.id,
+                  modifiedTime: file.modifiedTime,
+                });
                 new Notice(restored.createdAsConflictCopy
                   ? "Restored as conflict copy: " + restored.path
                   : "Restored: " + restored.path, 8000);
@@ -285,6 +304,10 @@ export default class CloudVaultSyncPlugin extends Plugin {
       const result = await this.transfer.uploadEncryptedFile(
         file.path, file.name, new Uint8Array(binary), this.settings.googleDriveFolderId.trim(), passphrase,
       );
+      await this.pathManifest?.record(file.path, passphrase, {
+        fileId: result.id,
+        modifiedTime: result.modifiedTime,
+      });
       new Notice("Encrypted upload complete: " + result.name, 7000);
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Encrypted upload paused. Use Resume pending Google Drive uploads.", 8000);
@@ -439,6 +462,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
       googleOAuthPending: this.googleOAuthPending,
       googleTokenEnvelope: this.googleTokenEnvelope,
       googlePendingUploads: this.googlePendingUploads,
+      encryptedPathManifest: this.pathManifestCiphertext,
     });
   }
 
