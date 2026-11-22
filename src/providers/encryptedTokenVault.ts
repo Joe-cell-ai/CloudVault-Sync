@@ -79,7 +79,7 @@ export class EncryptedTokenVault {
       const plaintext = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: asArrayBuffer(decode(envelope.iv)) },
         key,
-        decode(envelope.ciphertext),
+        asArrayBuffer(decode(envelope.ciphertext)),
       );
       const value = JSON.parse(decoder.decode(plaintext)) as TokenBundle;
       if (!value.accessToken || !Number.isFinite(value.expiresAt)) throw new Error("Invalid token payload.");
