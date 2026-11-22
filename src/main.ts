@@ -5,6 +5,7 @@ import { GoogleDriveAuth } from "./providers/googleDriveAuth";
 import { GoogleTokenManager } from "./providers/googleTokenManager";
 import type { StoredTokenEnvelope } from "./providers/encryptedTokenVault";
 import { GoogleDriveTransfer, restoreWithoutOverwrite } from "./providers/googleDriveTransfer";
+import { GoogleDriveDiscovery } from "./providers/googleDriveDiscovery";
 import type { ResumableUploadState } from "./providers/googleDriveTransfer";
 import { ObsidianPendingPayloadStore, PluginDataUploadStateStore, type BinaryStorageAdapter } from "./providers/obsidianTransferStores";
 import { CloudVaultSettingTab, DEFAULT_SETTINGS, type CloudVaultSettings } from "./settings";
@@ -28,6 +29,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
   private googlePendingUploads: ResumableUploadState[] = [];
   private uploadStates?: PluginDataUploadStateStore;
   private transfer?: GoogleDriveTransfer;
+  private discovery?: GoogleDriveDiscovery;
   private transferPassphrase?: string;
 
   async onload(): Promise<void> {
@@ -50,6 +52,10 @@ export default class CloudVaultSyncPlugin extends Plugin {
       new ObsidianPendingPayloadStore(this.app.vault.adapter as unknown as BinaryStorageAdapter),
       this.uploadStates,
     );
+    this.discovery = new GoogleDriveDiscovery(async () => {
+      if (!this.tokenManager || !this.transferPassphrase) throw new Error("Unlock Google Drive and enter your encryption passphrase before browsing.");
+      return this.tokenManager.getAccessToken(this.transferPassphrase);
+    });
 
     this.addSettingTab(new CloudVaultSettingTab(this.app, this as this & {
       settings: CloudVaultSettings;
@@ -78,6 +84,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
     this.addCommand({ id: "upload-active-file-encrypted", name: "Upload active file to Google Drive (encrypted)", callback: () => this.uploadActiveFile() });
     this.addCommand({ id: "resume-google-uploads", name: "Resume pending Google Drive uploads", callback: () => this.resumeGoogleUploads() });
     this.addCommand({ id: "download-google-file-encrypted", name: "Download encrypted Google Drive file safely", callback: () => this.downloadGoogleFile() });
+    this.addCommand({ id: "browse-google-drive-encrypted-files", name: "Browse encrypted Google Drive files", callback: () => this.browseGoogleDriveFiles() });
   }
 
   onunload(): void {
@@ -148,6 +155,93 @@ export default class CloudVaultSyncPlugin extends Plugin {
       }(this.app);
       modal.open();
     });
+  }
+
+
+  private async requestRemoteDestination(fileName: string): Promise<string | null> {
+    return new Promise(resolve => {
+      let settled = false;
+      const modal = new class extends Modal {
+        onOpen(): void {
+          this.titleEl.setText("Choose a safe download destination");
+          this.contentEl.createEl("p", { text: `Encrypted remote item: ${fileName}` });
+          const input = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "Vault path, e.g. notes/restored.md" } });
+          input.style.width = "100%";
+          new Setting(this.contentEl)
+            .addButton(button => button.setButtonText("Download").setCta().onClick(() => {
+              const path = input.value.trim().replace(/^\\/+/, "");
+              if (!path || path.split("/").includes("..")) {
+                new Notice("Enter a valid vault-relative path.");
+                return;
+              }
+              settled = true;
+              resolve(path);
+              this.close();
+            }))
+            .addExtraButton(button => button.setIcon("cross").setTooltip("Cancel").onClick(() => this.close()));
+        }
+        onClose(): void {
+          this.contentEl.empty();
+          if (!settled) resolve(null);
+        }
+      }(this.app);
+      modal.open();
+    });
+  }
+
+  private async browseGoogleDriveFiles(): Promise<void> {
+    if (!this.tokenManager?.isUnlocked() || !this.discovery || !this.transfer) {
+      new Notice("Unlock Google Drive credentials first.");
+      return;
+    }
+    if (!this.settings.googleDriveFolderId.trim()) {
+      new Notice("Set the Google Drive destination folder ID in CloudVault settings.");
+      return;
+    }
+    const passphrase = await this.requestPassphrase("Confirm CloudVault encryption passphrase", false);
+    if (!passphrase) return;
+    this.transferPassphrase = passphrase;
+    try {
+      const files = await this.discovery.listAllEncryptedFiles(this.settings.googleDriveFolderId.trim());
+      if (!files.length) {
+        new Notice("No CloudVault encrypted files were found in the selected Google Drive folder.");
+        return;
+      }
+      const modal = new class extends Modal {
+        onOpen(): void {
+          this.titleEl.setText(`CloudVault encrypted files (${files.length})`);
+          for (const file of files) {
+            const row = new Setting(this.contentEl)
+              .setName(file.pathHash.slice(0, 16) + "…")
+              .setDesc(`${file.modifiedTime || "Date unavailable"} · ${file.size ?? "Unknown"} bytes · encrypted`);
+            row.addButton(button => button.setButtonText("Download safely").onClick(async () => {
+              this.close();
+              const destination = await thisPlugin.requestRemoteDestination(file.opaqueName);
+              if (!destination) return;
+              try {
+                const plaintext = await thisPlugin.transfer!.downloadEncryptedFile(file.id, passphrase);
+                const restored = await restoreWithoutOverwrite({
+                  exists: async path => thisPlugin.app.vault.getAbstractFileByPath(path) !== null,
+                  createBinary: async (path, data) => thisPlugin.app.vault.createBinary(path, data),
+                }, destination, plaintext);
+                new Notice(restored.createdAsConflictCopy
+                  ? "Restored as conflict copy: " + restored.path
+                  : "Restored: " + restored.path, 8000);
+              } catch (error) {
+                new Notice(error instanceof Error ? error.message : "Encrypted download failed safely.", 8000);
+              }
+            }));
+          }
+        }
+        onClose(): void { this.contentEl.empty(); }
+      }(this.app);
+      const thisPlugin = this;
+      modal.open();
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not list encrypted Google Drive files.", 8000);
+    } finally {
+      this.transferPassphrase = undefined;
+    }
   }
 
   private async downloadGoogleFile(): Promise<void> {
