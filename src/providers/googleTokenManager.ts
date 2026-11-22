@@ -14,9 +14,13 @@ export class GoogleTokenManager {
   private readonly vault = new EncryptedTokenVault();
 
   constructor(
-    private readonly clientId: string,
+    private clientId: string,
     private readonly store: TokenEnvelopeStore,
   ) {}
+
+  setClientId(clientId: string): void { this.clientId = clientId; }
+
+  isUnlocked(): boolean { return Boolean(this.unlockedTokens); }
 
   async saveAuthorization(response: GoogleTokenResponse, passphrase: string): Promise<void> {
     if (!response.access_token || !response.expires_in) throw new Error("Google did not return a usable access token.");
