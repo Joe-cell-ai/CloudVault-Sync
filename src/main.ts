@@ -4,6 +4,9 @@ import type { VaultChange } from "./core/types";
 import { GoogleDriveAuth } from "./providers/googleDriveAuth";
 import { GoogleTokenManager } from "./providers/googleTokenManager";
 import type { StoredTokenEnvelope } from "./providers/encryptedTokenVault";
+import { GoogleDriveTransfer } from "./providers/googleDriveTransfer";
+import type { ResumableUploadState } from "./providers/googleDriveTransfer";
+import { ObsidianPendingPayloadStore, PluginDataUploadStateStore, type BinaryStorageAdapter } from "./providers/obsidianTransferStores";
 import { CloudVaultSettingTab, DEFAULT_SETTINGS, type CloudVaultSettings } from "./settings";
 
 interface PersistedData {
@@ -11,6 +14,7 @@ interface PersistedData {
   queue?: VaultChange[];
   googleOAuthPending?: { state: string; verifier: string; createdAt: number };
   googleTokenEnvelope?: StoredTokenEnvelope;
+  googlePendingUploads?: ResumableUploadState[];
 }
 
 export default class CloudVaultSyncPlugin extends Plugin {
@@ -21,6 +25,10 @@ export default class CloudVaultSyncPlugin extends Plugin {
   private googleOAuthPending: PersistedData["googleOAuthPending"];
   private googleTokenEnvelope?: StoredTokenEnvelope;
   private tokenManager?: GoogleTokenManager;
+  private googlePendingUploads: ResumableUploadState[] = [];
+  private uploadStates?: PluginDataUploadStateStore;
+  private transfer?: GoogleDriveTransfer;
+  private transferPassphrase?: string;
 
   async onload(): Promise<void> {
     const data = (await this.loadData()) as PersistedData | null;
@@ -29,6 +37,19 @@ export default class CloudVaultSyncPlugin extends Plugin {
     this.googleOAuthPending = data?.googleOAuthPending;
     this.googleTokenEnvelope = data?.googleTokenEnvelope;
     this.tokenManager = this.createTokenManager();
+    this.googlePendingUploads = data?.googlePendingUploads ?? [];
+    this.uploadStates = new PluginDataUploadStateStore(this.googlePendingUploads, async states => {
+      this.googlePendingUploads = states;
+      await this.persist();
+    });
+    this.transfer = new GoogleDriveTransfer(
+      async () => {
+        if (!this.tokenManager || !this.transferPassphrase) throw new Error("Unlock Google Drive and enter your encryption passphrase before transferring.");
+        return this.tokenManager.getAccessToken(this.transferPassphrase);
+      },
+      new ObsidianPendingPayloadStore(this.app.vault.adapter as unknown as BinaryStorageAdapter),
+      this.uploadStates,
+    );
 
     this.addSettingTab(new CloudVaultSettingTab(this.app, this as this & {
       settings: CloudVaultSettings;
@@ -54,6 +75,8 @@ export default class CloudVaultSyncPlugin extends Plugin {
       await this.persist();
       new Notice("CloudVault Sync: local queue saved.");
     }});
+    this.addCommand({ id: "upload-active-file-encrypted", name: "Upload active file to Google Drive (encrypted)", callback: () => this.uploadActiveFile() });
+    this.addCommand({ id: "resume-google-uploads", name: "Resume pending Google Drive uploads", callback: () => this.resumeGoogleUploads() });
   }
 
   onunload(): void {
@@ -87,6 +110,46 @@ export default class CloudVaultSyncPlugin extends Plugin {
       new Notice("Google Drive credentials unlocked. Sync is not active yet.");
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Could not unlock Google Drive.");
+    }
+  }
+
+
+  private async uploadActiveFile(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!file) { new Notice("Open a file before starting an encrypted upload."); return; }
+    if (!this.settings.googleDriveFolderId.trim()) { new Notice("Set the Google Drive destination folder ID in CloudVault settings."); return; }
+    if (!this.tokenManager?.isUnlocked() || !this.transfer) { new Notice("Unlock Google Drive credentials first."); return; }
+    const passphrase = await this.requestPassphrase("Confirm file encryption passphrase", false);
+    if (!passphrase) return;
+    this.transferPassphrase = passphrase;
+    try {
+      const binary = await this.app.vault.readBinary(file);
+      const result = await this.transfer.uploadEncryptedFile(
+        file.path, file.name, new Uint8Array(binary), this.settings.googleDriveFolderId.trim(), passphrase,
+      );
+      new Notice("Encrypted upload complete: " + result.name, 7000);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Encrypted upload paused. Use Resume pending Google Drive uploads.", 8000);
+    } finally {
+      this.transferPassphrase = undefined;
+    }
+  }
+
+  private async resumeGoogleUploads(): Promise<void> {
+    if (!this.tokenManager?.isUnlocked() || !this.transfer) { new Notice("Unlock Google Drive credentials first."); return; }
+    if (!this.googlePendingUploads.length) { new Notice("There are no pending Google Drive uploads."); return; }
+    const passphrase = await this.requestPassphrase("Confirm file encryption passphrase", false);
+    if (!passphrase) return;
+    this.transferPassphrase = passphrase;
+    try {
+      for (const pending of [...this.googlePendingUploads]) {
+        const result = await this.transfer.resumeUpload(pending.path);
+        new Notice("Resumed upload complete: " + result.name, 7000);
+      }
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Upload remains pending. Retry Resume later.", 8000);
+    } finally {
+      this.transferPassphrase = undefined;
     }
   }
 
@@ -217,6 +280,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
       queue: this.queue.list(),
       googleOAuthPending: this.googleOAuthPending,
       googleTokenEnvelope: this.googleTokenEnvelope,
+      googlePendingUploads: this.googlePendingUploads,
     });
   }
 
