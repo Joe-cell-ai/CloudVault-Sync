@@ -7,7 +7,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "check": "tsc --noEmit",
-    "test": "tsx --test src/core/ConflictDetector.test.ts src/providers/encryptedTokenVault.test.ts src/providers/encryptedFileVault.test.ts src/providers/googleDriveTransfer.test.ts src/providers/googleDriveTransfer.integration.test.ts src/providers/obsidianTransferStores.test.ts src/providers/googleDriveDiscovery.test.ts src/providers/encryptedPathManifest.test.ts"
+    "test": "tsx --test src/core/ConflictDetector.test.ts src/providers/encryptedTokenVault.test.ts src/providers/encryptedFileVault.test.ts src/providers/googleDriveTransfer.test.ts src/providers/googleDriveTransfer.integration.test.ts src/providers/obsidianTransferStores.test.ts src/providers/googleDriveDiscovery.test.ts src/providers/encryptedPathManifest.test.ts src/providers/encryptedSyncBaseline.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
