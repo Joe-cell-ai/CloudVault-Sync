@@ -130,7 +130,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
           new Setting(this.contentEl)
             .addButton(button => button.setButtonText("Download").setCta().onClick(() => {
               const fileId = id.value.trim();
-              const targetPath = path.value.trim().replace(/^\\/+/, "");
+              const targetPath = path.value.trim().replace(/^\/+/, "");
               if (!fileId || !targetPath || targetPath.split("/").includes("..")) {
                 new Notice("Enter a valid Google Drive file ID and vault-relative path.");
                 return;
