@@ -169,7 +169,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
           input.style.width = "100%";
           new Setting(this.contentEl)
             .addButton(button => button.setButtonText("Download").setCta().onClick(() => {
-              const path = input.value.trim().replace(/^\\/+/, "");
+              const path = input.value.trim().replace(/^\/+/, "");
               if (!path || path.split("/").includes("..")) {
                 new Notice("Enter a valid vault-relative path.");
                 return;
