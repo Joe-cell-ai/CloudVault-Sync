@@ -16,6 +16,8 @@ The current `main` branch includes:
 - Google Drive resumable encrypted uploads in aligned chunks, with encrypted pending payloads and upload-session offsets persisted for restart recovery.
 - Download-and-decrypt support plus a restore helper that creates a timestamped conflict copy rather than overwriting an existing vault file.
 - Opaque remote filenames and hashed path metadata to avoid exposing original vault paths in Google Drive listings.
+- Paginated Google Drive discovery restricted to CloudVault encrypted objects, with metadata validation and no content download during listing.
+- An Obsidian command to browse discovered encrypted files and restore a selected item to a user-chosen path without overwriting existing content.
 - A pure conflict-decision engine that distinguishes one-sided edits, two-sided edits, and deletion-vs-edit conflicts.
 - Automated tests for token encryption and conflict decisions, included in CI.
 
@@ -40,7 +42,7 @@ Copy `manifest.json` and `main.js` into:
 
 ## Google OAuth configuration (preview)
 
-Configure the redirect URI as `obsidian://cloudvault-sync-oauth` and enter the client ID plus that exact URI in plugin settings. The selected Google OAuth client type must permit this redirect scheme; this has not yet been validated against all Google client types or Obsidian mobile platforms. The plugin does not require a client secret in its current PKCE flow. After Google returns to Obsidian, create a strong passphrase (12+ characters) to encrypt the token bundle. Unlock it when needed and lock it when finished. Set a destination folder ID. Use the Obsidian command palette commands **Upload active file to Google Drive (encrypted)**, **Resume pending Google Drive uploads**, and **Download encrypted Google Drive file safely**. For downloads, supply the Google Drive file ID and a vault-relative destination path. File contents are encrypted before upload; remote names are opaque hashes. Losing the passphrase means encrypted content cannot be recovered.
+Configure the redirect URI as `obsidian://cloudvault-sync-oauth` and enter the client ID plus that exact URI in plugin settings. The selected Google OAuth client type must permit this redirect scheme; this has not yet been validated against all Google client types or Obsidian mobile platforms. The plugin does not require a client secret in its current PKCE flow. After Google returns to Obsidian, create a strong passphrase (12+ characters) to encrypt the token bundle. Unlock it when needed and lock it when finished. Set a destination folder ID. Use the Obsidian command palette commands **Upload active file to Google Drive (encrypted)**, **Resume pending Google Drive uploads**, **Browse encrypted Google Drive files**, and **Download encrypted Google Drive file safely**. The browser lists encrypted CloudVault objects in the configured folder; choose an item and a vault-relative destination path to restore it safely. File contents are encrypted before upload; remote names are opaque hashes. Losing the passphrase means encrypted content cannot be recovered.
 
 ## Safety requirements
 
@@ -56,7 +58,7 @@ These are project requirements. The modules listed above are foundations and do 
 ## Next work
 
 1. Validate OAuth callback compatibility on desktop, Android, and iOS.
-2. Implement remote file discovery and encrypted download into the local vault using the no-overwrite restore path.
+2. Add encrypted path-manifest storage so remote hashes can be mapped back to vault-relative paths without exposing those paths to providers.
 3. Add baseline tracking and an explicit conflict-resolution UI.
 4. Add remote change cursor persistence and automatic two-way reconciliation.
 5. Add independent OneDrive and MEGA adapters.
