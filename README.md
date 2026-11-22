@@ -9,11 +9,13 @@ The current `main` branch includes:
 - Google Drive OAuth 2.0 authorization-code + PKCE URL generation and callback-state validation.
 - A Google Drive REST read adapter for start-page tokens, change pages, and paginated folder listings.
 - An AES-256-GCM token-encryption utility using PBKDF2-SHA256, with no passphrase retained by the utility.
+- Google OAuth callback now stores the returned token bundle only as an encrypted envelope in Obsidian plugin data.
+- A passphrase modal to create/unlock credentials and explicitly lock the in-memory token session; the passphrase is not persisted.
 - A Google access-token manager with refresh-token handling.
 - A pure conflict-decision engine that distinguishes one-sided edits, two-sided edits, and deletion-vs-edit conflicts.
 - Automated tests for token encryption and conflict decisions, included in CI.
 
-**Important:** this is still not a working end-to-end sync release. The encrypted token vault and token manager are implemented as modules but are not yet connected to the settings UI or plugin persistence. OAuth callback still does not save credentials through the encrypted vault. The conflict detector is decision logic only; no upload, download, conflict-copy, or delete operation is executed. Do not rely on this build to sync or back up files.
+**Important:** this is still not a working end-to-end sync release. Google credentials can now be saved encrypted and manually unlocked/locked, but OAuth redirect compatibility must be validated with the exact Google OAuth client type and on each Obsidian platform. Access-token refresh is implemented in the manager, but a refreshed token envelope must be re-sealed with the user's passphrase before it is persisted. The conflict detector is decision logic only; no upload, download, conflict-copy, or delete operation is executed. Do not rely on this build to sync or back up files.
 
 ## Setup and checks
 
@@ -34,7 +36,7 @@ Copy `manifest.json` and `main.js` into:
 
 ## Google OAuth configuration (preview)
 
-Create an OAuth client in Google Cloud Console and configure a redirect URI supported by your chosen Obsidian platform/client. Enter the client ID and exact redirect URI in plugin settings. The plugin does not require a client secret in its current PKCE flow. Redirect handling and refresh-token behavior still require platform-specific validation before production use.
+Configure the redirect URI as `obsidian://cloudvault-sync-oauth` and enter the client ID plus that exact URI in plugin settings. The selected Google OAuth client type must permit this redirect scheme; this has not yet been validated against all Google client types or Obsidian mobile platforms. The plugin does not require a client secret in its current PKCE flow. After Google returns to Obsidian, create a strong passphrase (12+ characters) to encrypt the token bundle. Unlock it when needed and lock it when finished. Losing the passphrase means the saved token bundle cannot be recovered; reconnect Google Drive to create a new one.
 
 ## Safety requirements
 
@@ -49,7 +51,7 @@ These are project requirements. The modules listed above are foundations and do 
 
 ## Next work
 
-1. Wire encrypted credentials into plugin storage and a user-controlled unlock/lock flow.
+1. Validate OAuth callback compatibility on desktop, Android, and iOS; add a secure refresh-and-reseal flow.
 2. Persist provider change cursors and process remote changes safely.
 3. Create recoverable conflict copies and explicit conflict-resolution UI.
 4. Implement encrypted, resumable upload/download.
