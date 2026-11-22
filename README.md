@@ -18,6 +18,7 @@ The current `main` branch includes:
 - Opaque remote filenames and hashed path metadata to avoid exposing original vault paths in Google Drive listings.
 - Paginated Google Drive discovery restricted to CloudVault encrypted objects, with metadata validation and no content download during listing.
 - An Obsidian command to browse discovered encrypted files and restore a selected item to a user-chosen path without overwriting existing content.
+- A locally stored AES-256-GCM encrypted path manifest that maps opaque Google Drive path hashes back to vault-relative paths; known paths are prefilled during restore.
 - A pure conflict-decision engine that distinguishes one-sided edits, two-sided edits, and deletion-vs-edit conflicts.
 - Automated tests for token encryption and conflict decisions, included in CI.
 
@@ -58,11 +59,10 @@ These are project requirements. The modules listed above are foundations and do 
 ## Next work
 
 1. Validate OAuth callback compatibility on desktop, Android, and iOS.
-2. Add encrypted path-manifest storage so remote hashes can be mapped back to vault-relative paths without exposing those paths to providers.
-3. Add baseline tracking and an explicit conflict-resolution UI.
-4. Add remote change cursor persistence and automatic two-way reconciliation.
-5. Add independent OneDrive and MEGA adapters.
-6. Validate interrupted transfers and platform behavior on desktop, Android, and iOS.
+2. Add baseline tracking (content hashes and remote revisions) and an explicit conflict-resolution UI.
+3. Add remote change cursor persistence and automatic two-way reconciliation.
+4. Add independent OneDrive and MEGA adapters.
+5. Validate interrupted transfers and platform behavior on desktop, Android, and iOS.
 
 ## License
 
