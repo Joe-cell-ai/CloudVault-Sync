@@ -54,10 +54,10 @@ export function detectConflict(
   }
 
   const localChanged = current.localExists
-    ? !baseline.localExists || current.localRevision !== baseline.localRevision
+    ? current.localRevision !== baseline.localRevision
     : true;
   const remoteChanged = current.remoteExists
-    ? !baseline.remoteExists || current.remoteRevision !== baseline.remoteRevision
+    ? current.remoteRevision !== baseline.remoteRevision
     : true;
 
   if (localChanged && remoteChanged) {
