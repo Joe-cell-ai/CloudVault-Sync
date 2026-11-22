@@ -4,7 +4,7 @@ import type { VaultChange } from "./core/types";
 import { GoogleDriveAuth } from "./providers/googleDriveAuth";
 import { GoogleTokenManager } from "./providers/googleTokenManager";
 import type { StoredTokenEnvelope } from "./providers/encryptedTokenVault";
-import { GoogleDriveTransfer } from "./providers/googleDriveTransfer";
+import { GoogleDriveTransfer, restoreWithoutOverwrite } from "./providers/googleDriveTransfer";
 import type { ResumableUploadState } from "./providers/googleDriveTransfer";
 import { ObsidianPendingPayloadStore, PluginDataUploadStateStore, type BinaryStorageAdapter } from "./providers/obsidianTransferStores";
 import { CloudVaultSettingTab, DEFAULT_SETTINGS, type CloudVaultSettings } from "./settings";
@@ -77,6 +77,7 @@ export default class CloudVaultSyncPlugin extends Plugin {
     }});
     this.addCommand({ id: "upload-active-file-encrypted", name: "Upload active file to Google Drive (encrypted)", callback: () => this.uploadActiveFile() });
     this.addCommand({ id: "resume-google-uploads", name: "Resume pending Google Drive uploads", callback: () => this.resumeGoogleUploads() });
+    this.addCommand({ id: "download-google-file-encrypted", name: "Download encrypted Google Drive file safely", callback: () => this.downloadGoogleFile() });
   }
 
   onunload(): void {
@@ -113,6 +114,64 @@ export default class CloudVaultSyncPlugin extends Plugin {
     }
   }
 
+
+
+  private requestDownloadDetails(): Promise<{ fileId: string; path: string } | null> {
+    return new Promise(resolve => {
+      let settled = false;
+      const modal = new class extends Modal {
+        onOpen(): void {
+          this.titleEl.setText("Download encrypted Google Drive file");
+          const id = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "Google Drive file ID" } });
+          id.style.width = "100%";
+          const path = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "Vault destination path, e.g. notes/file.md" } });
+          path.style.width = "100%";
+          path.style.marginTop = "8px";
+          new Setting(this.contentEl)
+            .addButton(button => button.setButtonText("Download").setCta().onClick(() => {
+              const fileId = id.value.trim();
+              const targetPath = path.value.trim().replace(/^\\/+/, "");
+              if (!fileId || !targetPath || targetPath.split("/").includes("..")) {
+                new Notice("Enter a valid Google Drive file ID and vault-relative path.");
+                return;
+              }
+              settled = true;
+              resolve({ fileId, path: targetPath });
+              this.close();
+            }))
+            .addExtraButton(button => button.setIcon("cross").setTooltip("Cancel").onClick(() => this.close()));
+        }
+        onClose(): void {
+          this.contentEl.empty();
+          if (!settled) resolve(null);
+        }
+      }(this.app);
+      modal.open();
+    });
+  }
+
+  private async downloadGoogleFile(): Promise<void> {
+    if (!this.tokenManager?.isUnlocked() || !this.transfer) { new Notice("Unlock Google Drive credentials first."); return; }
+    const details = await this.requestDownloadDetails();
+    if (!details) return;
+    const passphrase = await this.requestPassphrase("Enter your CloudVault file encryption passphrase", false);
+    if (!passphrase) return;
+    this.transferPassphrase = passphrase;
+    try {
+      const plaintext = await this.transfer.downloadEncryptedFile(details.fileId, passphrase);
+      const result = await restoreWithoutOverwrite({
+        exists: async path => this.app.vault.getAbstractFileByPath(path) !== null,
+        createBinary: async (path, data) => this.app.vault.createBinary(path, data),
+      }, details.path, plaintext);
+      new Notice(result.createdAsConflictCopy
+        ? "Downloaded safely as a conflict copy: " + result.path
+        : "Downloaded file: " + result.path, 8000);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Encrypted download failed; no existing file was overwritten.", 8000);
+    } finally {
+      this.transferPassphrase = undefined;
+    }
+  }
 
   private async uploadActiveFile(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
