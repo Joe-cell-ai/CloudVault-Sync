@@ -84,8 +84,17 @@ export class CloudVaultSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
     new Setting(containerEl)
+      .setName("Destination folder ID")
+      .setDesc("Google Drive folder ID where encrypted vault files will be uploaded.")
+      .addText(text => text.setPlaceholder("Google Drive folder ID")
+        .setValue(this.plugin.settings.googleDriveFolderId)
+        .onChange(async value => {
+          this.plugin.settings.googleDriveFolderId = value.trim();
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
       .setName("Connect Google Drive")
-      .setDesc("Starts OAuth with PKCE. After authorization, credentials are encrypted locally using a passphrase; file sync is not enabled yet.")
+      .setDesc("Starts OAuth with PKCE. Credentials are encrypted locally. Use the Obsidian command palette to upload the active file encrypted or resume pending uploads.")
       .addButton(button => button.setButtonText("Connect").onClick(async () => {
         await this.plugin.connectGoogleDrive();
       }));
