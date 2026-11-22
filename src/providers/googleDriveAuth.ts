@@ -5,7 +5,7 @@ const SCOPES = ["https://www.googleapis.com/auth/drive.file", "openid"];
 function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 async function sha256(value: string): Promise<Uint8Array> {
@@ -27,7 +27,7 @@ export interface GoogleTokenResponse {
 }
 
 export class GoogleDriveAuth {
-  createAuthorizationUrl(clientId: string, redirectUri: string): { url: string; pending: GoogleOAuthPending } {
+  async createAuthorizationUrl(clientId: string, redirectUri: string): Promise<{ url: string; pending: GoogleOAuthPending }> {
     if (!clientId.trim() || !redirectUri.trim()) throw new Error("Set the Google OAuth client ID and redirect URI first.");
     const verifierBytes = crypto.getRandomValues(new Uint8Array(32));
     const stateBytes = crypto.getRandomValues(new Uint8Array(24));
