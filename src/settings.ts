@@ -20,12 +20,24 @@ export const DEFAULT_SETTINGS: CloudVaultSettings = {
 };
 
 export class CloudVaultSettingTab extends PluginSettingTab {
-  plugin: Plugin & { settings: CloudVaultSettings; saveSettings: () => Promise<void>; connectGoogleDrive: () => Promise<void> };
+  plugin: Plugin & {
+    settings: CloudVaultSettings;
+    saveSettings: () => Promise<void>;
+    connectGoogleDrive: () => Promise<void>;
+    unlockGoogleDrive: () => Promise<void>;
+    lockGoogleDrive: () => void;
+    hasGoogleDriveCredentials: () => boolean;
+    isGoogleDriveUnlocked: () => boolean;
+  };
 
   constructor(app: ConstructorParameters<typeof PluginSettingTab>[0], plugin: Plugin & {
     settings: CloudVaultSettings;
     saveSettings: () => Promise<void>;
     connectGoogleDrive: () => Promise<void>;
+    unlockGoogleDrive: () => Promise<void>;
+    lockGoogleDrive: () => void;
+    hasGoogleDriveCredentials: () => boolean;
+    isGoogleDriveUnlocked: () => boolean;
   }) {
     super(app, plugin);
     this.plugin = plugin;
@@ -52,7 +64,7 @@ export class CloudVaultSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       }));
 
-    containerEl.createEl("h3", { text: "Google Drive (preview)" });
+    containerEl.createEl("h3", { text: "Google Drive" });
     new Setting(containerEl)
       .setName("OAuth client ID")
       .setDesc("Google OAuth client ID. Use a client configuration that supports your registered redirect URI.")
@@ -64,8 +76,8 @@ export class CloudVaultSettingTab extends PluginSettingTab {
         }));
     new Setting(containerEl)
       .setName("Redirect URI")
-      .setDesc("Must exactly match a redirect URI registered in your Google Cloud OAuth client.")
-      .addText(text => text.setPlaceholder("https://your-auth-callback.example/")
+      .setDesc("Use obsidian://cloudvault-sync-oauth and register the exact URI with an OAuth client that permits this redirect scheme.")
+      .addText(text => text.setPlaceholder("obsidian://cloudvault-sync-oauth")
         .setValue(this.plugin.settings.googleDriveRedirectUri)
         .onChange(async value => {
           this.plugin.settings.googleDriveRedirectUri = value.trim();
@@ -73,10 +85,28 @@ export class CloudVaultSettingTab extends PluginSettingTab {
         }));
     new Setting(containerEl)
       .setName("Connect Google Drive")
-      .setDesc("Starts OAuth authorization with PKCE. No upload or download is performed by this preview.")
+      .setDesc("Starts OAuth with PKCE. After authorization, credentials are encrypted locally using a passphrase; file sync is not enabled yet.")
       .addButton(button => button.setButtonText("Connect").onClick(async () => {
         await this.plugin.connectGoogleDrive();
       }));
+
+    const credentialState = !this.plugin.hasGoogleDriveCredentials()
+      ? "Not connected"
+      : this.plugin.isGoogleDriveUnlocked() ? "Connected · unlocked in memory" : "Connected · locked";
+    containerEl.createEl("p", { text: `Google Drive credentials: ${credentialState}` });
+    if (this.plugin.hasGoogleDriveCredentials()) {
+      new Setting(containerEl)
+        .setName("Unlock Google Drive")
+        .setDesc("Unlocks the locally encrypted token bundle for this Obsidian session.")
+        .addButton(button => button.setButtonText("Unlock").setDisabled(this.plugin.isGoogleDriveUnlocked()).onClick(async () => {
+          await this.plugin.unlockGoogleDrive();
+          this.display();
+        }))
+        .addButton(button => button.setButtonText("Lock").setDisabled(!this.plugin.isGoogleDriveUnlocked()).onClick(() => {
+          this.plugin.lockGoogleDrive();
+          this.display();
+        }));
+    }
 
     containerEl.createEl("h3", { text: "Other providers" });
     for (const label of ["Microsoft OneDrive", "MEGA"]) {
