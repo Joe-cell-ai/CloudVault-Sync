@@ -1,13 +1,10 @@
 import { EncryptedFileVault } from "./encryptedFileVault";
+import { hashVaultPath } from "./encryptedPathManifest";
 
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const CHUNK_SIZE = 8 * 1024 * 1024; // multiple of Google's 256 KiB alignment
 
-async function opaqueRemoteName(path: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(path)));
-  return "cloudvault-" + [...digest].map(byte => byte.toString(16).padStart(2, "0")).join("");
-}
 
 export interface PendingPayloadStore {
   put(key: string, payload: Uint8Array): Promise<string>;
@@ -89,7 +86,7 @@ export class GoogleDriveTransfer {
     if (!state.sessionUrl) {
       const token = await this.accessToken();
       const metadata = {
-        name: await opaqueRemoteName(state.path),
+        name: await hashVaultPath(state.path),
         mimeType: "application/octet-stream",
         parents: [state.folderId],
         appProperties: {
