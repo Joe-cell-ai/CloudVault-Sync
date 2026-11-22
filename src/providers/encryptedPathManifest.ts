@@ -47,7 +47,6 @@ export class EncryptedPathManifest {
     passphrase: string,
     remote?: { fileId?: string; modifiedTime?: string },
   ): Promise<PathManifestEntry> {
-    const entries = await this.readEntries(passphrase);
     const pathHash = await hashVaultPath(path);
     return this.recordRemote(pathHash, path, passphrase, remote);
   }
@@ -61,7 +60,7 @@ export class EncryptedPathManifest {
     if (!/^cloudvault-[a-f0-9]{64}$/.test(pathHash)) {
       throw new Error("Invalid CloudVault remote path hash.");
     }
-    const normalizedPath = vaultPath.replace(/\\\\/g, "/").replace(/^\\/+/, "");
+    const normalizedPath = vaultPath.replace(/^\/+/, "");
     if (!normalizedPath || normalizedPath.split("/").some(part => !part || part === "." || part === "..")) {
       throw new Error("The vault path manifest requires a safe vault-relative path.");
     }
