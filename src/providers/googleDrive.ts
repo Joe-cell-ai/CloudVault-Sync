@@ -2,18 +2,19 @@ import type { RemoteFile, RemoteChangeCursor } from "../core/types";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
+export interface GoogleDriveChange {
+  fileId: string;
+  removed: boolean;
+  file?: RemoteFile;
+}
+
 export class GoogleDriveProvider {
   constructor(private readonly accessToken: () => Promise<string>) {}
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string): Promise<T> {
     const token = await this.accessToken();
     const response = await fetch(`${DRIVE_API}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init.body instanceof Blob ? { "Content-Type": "application/octet-stream" } : {}),
-        ...init.headers,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) throw new Error(`Google Drive request failed (${response.status}).`);
     return await response.json() as T;
@@ -24,7 +25,11 @@ export class GoogleDriveProvider {
     return { startPageToken: result.startPageToken };
   }
 
-  async listChanges(pageToken: string): Promise<{ files: RemoteFile[]; nextPageToken?: string; newStartPageToken?: string }> {
+  async listChanges(pageToken: string): Promise<{
+    changes: GoogleDriveChange[];
+    nextPageToken?: string;
+    newStartPageToken?: string;
+  }> {
     const query = new URLSearchParams({
       pageToken,
       spaces: "drive",
@@ -34,23 +39,30 @@ export class GoogleDriveProvider {
     const result = await this.request<{
       nextPageToken?: string;
       newStartPageToken?: string;
-      changes?: Array<{ fileId: string; removed?: boolean; file?: RemoteFile }>;
+      changes?: GoogleDriveChange[];
     }>(`/changes?${query}`);
     return {
-      files: (result.changes ?? []).filter(change => !change.removed && change.file).map(change => change.file as RemoteFile),
+      changes: result.changes ?? [],
       nextPageToken: result.nextPageToken,
       newStartPageToken: result.newStartPageToken,
     };
   }
 
   async listVaultFiles(folderId: string): Promise<RemoteFile[]> {
-    const query = new URLSearchParams({
-      q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`,
-      pageSize: "1000",
-      orderBy: "folder,name",
-      fields: "files(id,name,mimeType,modifiedTime,etag,size,trashed,parents),nextPageToken",
-    });
-    const result = await this.request<{ files?: RemoteFile[] }>(`/files?${query}`);
-    return result.files ?? [];
+    const files: RemoteFile[] = [];
+    let pageToken: string | undefined;
+    do {
+      const query = new URLSearchParams({
+        q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`,
+        pageSize: "1000",
+        orderBy: "folder,name",
+        fields: "files(id,name,mimeType,modifiedTime,etag,size,trashed,parents),nextPageToken",
+      });
+      if (pageToken) query.set("pageToken", pageToken);
+      const result = await this.request<{ files?: RemoteFile[]; nextPageToken?: string }>(`/files?${query}`);
+      files.push(...(result.files ?? []));
+      pageToken = result.nextPageToken;
+    } while (pageToken);
+    return files;
   }
 }
