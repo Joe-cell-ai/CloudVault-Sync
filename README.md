@@ -21,7 +21,7 @@ The current `main` branch includes:
 - A pure conflict-decision engine that distinguishes one-sided edits, two-sided edits, and deletion-vs-edit conflicts.
 - Automated tests for token encryption and conflict decisions, included in CI.
 
-**Important:** this is still not a working end-to-end sync release. Google credentials can now be saved encrypted and manually unlocked/locked, but OAuth redirect compatibility must be validated with the exact Google OAuth client type and on each Obsidian platform. Access-token refresh is implemented in the manager, but a refreshed token envelope must be re-sealed with the user's passphrase before it is persisted. The conflict detector is decision logic only; no upload, download, conflict-copy, or delete operation is executed. Do not rely on this build to sync or back up files.
+**Important:** this is still not a working end-to-end sync release. Google credentials can now be saved encrypted and manually unlocked/locked, but OAuth redirect compatibility must be validated with the exact Google OAuth client type and on each Obsidian platform. Access-token refresh is implemented in the manager, but a refreshed token envelope must be re-sealed with the user's passphrase before it is persisted. Encrypted uploads and user-initiated downloads are available as manual commands, and downloads never overwrite existing files. Automatic vault-wide reconciliation, baseline-aware conflict handling, and remote deletion are not implemented. Do not rely on this build to sync or back up files.
 
 ## Setup and checks
 
