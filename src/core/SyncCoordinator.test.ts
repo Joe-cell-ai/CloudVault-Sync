@@ -9,7 +9,7 @@ describe("SyncCoordinator", () => {
     let cursor: string | undefined;
     let downloaded = 0;
     const provider: SyncProvider = {
-      listChanges: async () => ({ files: [], nextCursor: "delta-2" }),
+      listChanges: async () => ({ files: [], removedIds: [], nextCursor: "delta-2" }),
       upload: async () => { throw new Error("unused"); },
       download: async () => { downloaded++; return new Uint8Array(); },
     };
