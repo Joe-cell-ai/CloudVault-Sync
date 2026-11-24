@@ -42,7 +42,7 @@ export class OneDriveProvider {
     if (!/^cloudvault-[a-f0-9]{64}$/.test(pathHash)) throw new Error("Invalid opaque CloudVault path key.");
     const url = existingItemId
       ? `${GRAPH}/me/drive/items/${encodeURIComponent(existingItemId)}/content`
-      : `${GRAPH}/me/drive/root:/CloudVault/${pathHash}.cvault:/content`;
+      : `${GRAPH}/me/drive/root:/${pathHash}.cvault:/content`;
     const response = await this.request(url, {
       method: "PUT",
       headers: { "Content-Type": "application/octet-stream" },
